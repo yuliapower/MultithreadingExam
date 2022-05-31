@@ -44,7 +44,4 @@ public class SimpleMessage implements Serializable {
         return new SimpleMessage(sender,text);
     }
 
-
-
-
 }

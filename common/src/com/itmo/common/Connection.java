@@ -23,21 +23,16 @@ public class Connection implements AutoCloseable {
     }
 
     public void sendMessage(SimpleMessage message) throws IOException {
-
         message.setDateTime();
         output.writeObject(message);
         output.flush();
-
-
     }
-
 
     public SimpleMessage readMessage() throws IOException, ClassNotFoundException {
        SimpleMessage message = (SimpleMessage) input.readObject();
        nameSender = message.getSender();
         return message;
     }
-
 
     @Override
     public String toString() {

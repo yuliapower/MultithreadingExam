@@ -9,71 +9,63 @@ import java.net.Socket;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.LinkedTransferQueue;
 
-
 public class Server {
     private int port;
     private LinkedTransferQueue<SimpleMessage> messages;
-    private CopyOnWriteArraySet<Connection> clients;
-
+    private CopyOnWriteArraySet<Connection> connections;
 
     public Server(int port) {
         this.port = port;
         this.messages = new LinkedTransferQueue<>();
-        this.clients = new CopyOnWriteArraySet<>();
+        this.connections = new CopyOnWriteArraySet<>();
     }
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Сервер запущен");
-
             new Thread(new SenderMessage()).start();
             while (true) {
                 Socket newClient = serverSocket.accept();
-                new Thread(new ThreadClientHandler(newClient)).start();
-
+                new Thread(new ReceiverMessage(newClient)).start();
             }
         } catch (IOException e) {
             System.out.println(e.getMessage());
-
         }
     }
 
-
-    public class ThreadClientHandler implements Runnable {
+    public class ReceiverMessage implements Runnable {
         private Socket socket;
         private Connection connection;
 
-
-        public ThreadClientHandler(Socket socket) throws IOException {
+        public ReceiverMessage(Socket socket) throws IOException {
             this.socket = socket;
             this.connection = new Connection(socket);
-
         }
-
 
         @Override
         public void run() {
-            try {
-                SimpleMessage message = connection.readMessage();
 
-                messages.put(message);//добавления пепрвого сообщения в блокирующую очередь
-                clients.add(connection);//добавленяи подключений
-                messages.transfer(message);
-                System.out.println(clients);
+            while (true) {
+                try {
+                    SimpleMessage message = connection.readMessage();
+                    if (message.getText().equalsIgnoreCase("exit")) {
+                        connections.remove(connection);
+                        Thread.currentThread().interrupt();
+                    }
+                    messages.put(message);
+                    connections.add(connection);
+                    messages.transfer(message);
+                    System.out.println(Thread.currentThread() + " client name:" + message.getSender()+" text:"+message.getText());
 
-                while (true) {
-                    SimpleMessage message1 = connection.readMessage();
-                    messages.put(message1);//добавления сообщений в блокирующую очередь
-                    messages.transfer(message1);
+                } catch (IOException | ClassNotFoundException | InterruptedException e) {
+                    System.out.println(e.getMessage());
+                    Thread.currentThread().interrupt();
                 }
-            } catch (IOException | ClassNotFoundException | InterruptedException e) {
-                System.out.println(e.getMessage());
             }
         }
     }
 
     public class SenderMessage implements Runnable {
-
 
         @Override
         public void run() {
@@ -81,11 +73,10 @@ public class Server {
             while (true) {
                 try {
                     SimpleMessage message = messages.take();
-                    for (Connection cl : clients) {
-                        if (!cl.getNameSender().equals(message.getSender())) {
+                    for (Connection client : connections) {
+                        if (!client.getNameSender().equals(message.getSender())) {
                             try {
-                                cl.sendMessage(SimpleMessage.getMessage(message.getSender(), message.getText()));
-
+                                client.sendMessage(message);
                             } catch (IOException e) {
                                 System.out.println(e.getMessage());
                             }
@@ -93,9 +84,8 @@ public class Server {
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                    Thread.currentThread().interrupt();
                 }
-
-
             }
         }
     }
